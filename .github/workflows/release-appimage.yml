@@ -39,19 +39,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Restore Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cargo
+            .rustup
+            target/${{ matrix.arch.label }}
+          key: ${{ runner.os }}-${{ matrix.arch.label }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch.label }}-cargo-
+
       - name: Build and package
         uses: uraimo/run-on-arch-action@f9b26e3a1a408d5fd530d20c17b9f3f4428ff8d9 # v3.1.0
-        env:
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-          APPIMAGE_ARCH: ${{ matrix.arch.appimage_arch }}
-          APPIMAGE_SUFFIX: ${{ matrix.arch.artifact_suffix }}
-          APPIMAGETOOL_URL: ${{ matrix.arch.appimagetool_url }}
-          APP_NAME: ${{ env.APP_NAME }}
         with:
           arch: ${{ matrix.arch.runner_arch }}
           distro: ${{ matrix.arch.runner_distro }}
           base_image: ${{ matrix.arch.base_image }}
           githubToken: ${{ github.token }}
+          dockerRunArgs: |
+            --volume "${PWD}/.cargo:/root/.cargo"
+            --volume "${PWD}/.rustup:/root/.rustup"
+            --volume "${PWD}/target/${{ matrix.arch.label }}:/target"
+          env: |
+            GITHUB_REF_NAME: ${{ github.ref_name }}
+            APPIMAGE_ARCH: ${{ matrix.arch.appimage_arch }}
+            APPIMAGE_SUFFIX: ${{ matrix.arch.artifact_suffix }}
+            APPIMAGETOOL_URL: ${{ matrix.arch.appimagetool_url }}
+            APP_NAME: ${{ env.APP_NAME }}
+            CARGO_HOME: /root/.cargo
+            RUSTUP_HOME: /root/.rustup
+            CARGO_TARGET_DIR: /target
           install: |
             apt-get update -y
             apt-get install -y \
@@ -73,12 +91,21 @@ jobs:
           run: |
             set -euxo pipefail
 
-            curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
-            . "$HOME/.cargo/env"
+            export PATH="$CARGO_HOME/bin:$PATH"
+
+            if [ ! -x "$CARGO_HOME/bin/cargo" ]; then
+              curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
+            fi
+            . "$CARGO_HOME/env"
 
             cargo build --release --locked
 
-            version="${GITHUB_REF_NAME#v}"
+            version="${GITHUB_REF_NAME:-}"
+            if [ -z "$version" ]; then
+              echo "GITHUB_REF_NAME is not set" >&2
+              exit 1
+            fi
+            version="${version#v}"
             artifact_name="${APP_NAME}-${version}-${APPIMAGE_SUFFIX}.AppImage"
 
             mkdir -p AppDir/usr/bin
