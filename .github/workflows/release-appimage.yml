@@ -109,7 +109,7 @@ jobs:
             artifact_name="${APP_NAME}-${version}-${APPIMAGE_SUFFIX}.AppImage"
 
             mkdir -p AppDir/usr/bin
-            cp "target/release/${APP_NAME}" AppDir/usr/bin/${APP_NAME}
+            cp "${CARGO_TARGET_DIR}/release/${APP_NAME}" AppDir/usr/bin/${APP_NAME}
             cp assets/logo.png AppDir/${APP_NAME}.png
 
             printf '%s\n' \
