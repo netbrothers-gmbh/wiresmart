@@ -21,19 +21,23 @@ jobs:
       matrix:
         arch:
           - label: x86_64
-            runner_arch: amd64
+            runner_arch: none
+            runner_distro: none
+            base_image: ubuntu:22.04
             appimage_arch: x86_64
             artifact_suffix: x86_64
             appimagetool_url: https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           - label: aarch64
-            runner_arch: arm64
+            runner_arch: aarch64
+            runner_distro: ubuntu22.04
+            base_image: ""
             appimage_arch: aarch64
             artifact_suffix: aarch64
             appimagetool_url: https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-aarch64.AppImage
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build and package
         uses: uraimo/run-on-arch-action@f9b26e3a1a408d5fd530d20c17b9f3f4428ff8d9 # v3.1.0
@@ -45,7 +49,8 @@ jobs:
           APP_NAME: ${{ env.APP_NAME }}
         with:
           arch: ${{ matrix.arch.runner_arch }}
-          distro: ubuntu22.04
+          distro: ${{ matrix.arch.runner_distro }}
+          base_image: ${{ matrix.arch.base_image }}
           githubToken: ${{ github.token }}
           install: |
             apt-get update -y
