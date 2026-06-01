@@ -14,26 +14,8 @@ env:
 
 jobs:
   build-appimage:
-    name: Build AppImage (${{ matrix.arch.label }})
+    name: Build AppImage (x86_64)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - label: x86_64
-            runner_arch: none
-            runner_distro: none
-            base_image: ubuntu:22.04
-            appimage_arch: x86_64
-            artifact_suffix: x86_64
-            appimagetool_url: https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          - label: aarch64
-            runner_arch: aarch64
-            runner_distro: ubuntu22.04
-            base_image: ""
-            appimage_arch: aarch64
-            artifact_suffix: aarch64
-            appimagetool_url: https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-aarch64.AppImage
 
     steps:
       - name: Checkout
@@ -45,27 +27,27 @@ jobs:
           path: |
             .cargo
             .rustup
-            target/${{ matrix.arch.label }}
-          key: ${{ runner.os }}-${{ matrix.arch.label }}-cargo-${{ hashFiles('Cargo.lock') }}
+            target/x86_64
+          key: ${{ runner.os }}-x86_64-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.arch.label }}-cargo-
+            ${{ runner.os }}-x86_64-cargo-
 
       - name: Build and package
         uses: uraimo/run-on-arch-action@f9b26e3a1a408d5fd530d20c17b9f3f4428ff8d9 # v3.1.0
         with:
-          arch: ${{ matrix.arch.runner_arch }}
-          distro: ${{ matrix.arch.runner_distro }}
-          base_image: ${{ matrix.arch.base_image }}
+          arch: none
+          distro: none
+          base_image: ubuntu:22.04
           githubToken: ${{ github.token }}
           dockerRunArgs: |
             --volume "${PWD}/.cargo:/root/.cargo"
             --volume "${PWD}/.rustup:/root/.rustup"
-            --volume "${PWD}/target/${{ matrix.arch.label }}:/target"
+            --volume "${PWD}/target/x86_64:/target"
           env: |
             GITHUB_REF_NAME: ${{ github.ref_name }}
-            APPIMAGE_ARCH: ${{ matrix.arch.appimage_arch }}
-            APPIMAGE_SUFFIX: ${{ matrix.arch.artifact_suffix }}
-            APPIMAGETOOL_URL: ${{ matrix.arch.appimagetool_url }}
+            APPIMAGE_ARCH: x86_64
+            APPIMAGE_SUFFIX: x86_64
+            APPIMAGETOOL_URL: https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
             APP_NAME: ${{ env.APP_NAME }}
             CARGO_HOME: /root/.cargo
             RUSTUP_HOME: /root/.rustup
@@ -131,6 +113,9 @@ jobs:
 
             curl -L "$APPIMAGETOOL_URL" -o appimagetool-${APPIMAGE_ARCH}.AppImage
             chmod +x appimagetool-${APPIMAGE_ARCH}.AppImage
+
+            # Fail early if the download is not an ELF binary (e.g. HTML error page).
+            file appimagetool-${APPIMAGE_ARCH}.AppImage
             ARCH="$APPIMAGE_ARCH" ./appimagetool-${APPIMAGE_ARCH}.AppImage --appimage-extract-and-run AppDir "$artifact_name"
             rm -f appimagetool-${APPIMAGE_ARCH}.AppImage
 
@@ -139,7 +124,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: appimage-${{ matrix.arch.artifact_suffix }}
+          name: appimage-x86_64
           if-no-files-found: error
           path: |
             wiresmart-*.AppImage
