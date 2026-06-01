@@ -511,8 +511,7 @@ fn insert_tunnel_from_path(entries: &mut BTreeMap<String, Tunnel>, path: PathBuf
 }
 
 fn start_privileged_helper() -> Result<HelperClient, String> {
-    let executable = env::current_exe()
-        .map_err(|err| format!("Failed to resolve app executable path: {}", err))?;
+    let executable = helper_server_executable_path()?;
 
     let mut child = Command::new("pkexec")
         .arg("--disable-internal-agent")
@@ -537,6 +536,17 @@ fn start_privileged_helper() -> Result<HelperClient, String> {
         stdin,
         stdout: BufReader::new(stdout),
     })
+}
+
+fn helper_server_executable_path() -> Result<PathBuf, String> {
+    if let Some(appimage) = env::var_os("APPIMAGE") {
+        let path = PathBuf::from(appimage);
+        if path.exists() {
+            return Ok(path);
+        }
+    }
+
+    env::current_exe().map_err(|err| format!("Failed to resolve app executable path: {}", err))
 }
 
 fn run_helper_server() -> Result<(), String> {
