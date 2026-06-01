@@ -129,10 +129,10 @@ jobs:
               'Terminal=false' \
               > AppDir/${APP_NAME}.desktop
 
-            curl -L "$APPIMAGETOOL_URL" -o appimagetool.AppImage
-            chmod +x appimagetool.AppImage
-            ARCH="$APPIMAGE_ARCH" ./appimagetool.AppImage --appimage-extract-and-run AppDir "$artifact_name"
-            rm -f appimagetool.AppImage
+            curl -L "$APPIMAGETOOL_URL" -o appimagetool-${APPIMAGE_ARCH}.AppImage
+            chmod +x appimagetool-${APPIMAGE_ARCH}.AppImage
+            ARCH="$APPIMAGE_ARCH" ./appimagetool-${APPIMAGE_ARCH}.AppImage --appimage-extract-and-run AppDir "$artifact_name"
+            rm -f appimagetool-${APPIMAGE_ARCH}.AppImage
 
             sha256sum "$artifact_name" > "${artifact_name}.sha256"
 
