@@ -1,0 +1,136 @@
+name: Release AppImage
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  APP_NAME: wiresmart
+
+jobs:
+  build-appimage:
+    name: Build AppImage (${{ matrix.arch.label }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - label: x86_64
+            runner_arch: amd64
+            appimage_arch: x86_64
+            artifact_suffix: x86_64
+            appimagetool_url: https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          - label: aarch64
+            runner_arch: arm64
+            appimage_arch: aarch64
+            artifact_suffix: aarch64
+            appimagetool_url: https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-aarch64.AppImage
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and package
+        uses: uraimo/run-on-arch-action@f9b26e3a1a408d5fd530d20c17b9f3f4428ff8d9 # v3.1.0
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          APPIMAGE_ARCH: ${{ matrix.arch.appimage_arch }}
+          APPIMAGE_SUFFIX: ${{ matrix.arch.artifact_suffix }}
+          APPIMAGETOOL_URL: ${{ matrix.arch.appimagetool_url }}
+          APP_NAME: ${{ env.APP_NAME }}
+        with:
+          arch: ${{ matrix.arch.runner_arch }}
+          distro: ubuntu22.04
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update -y
+            apt-get install -y \
+              ca-certificates \
+              curl \
+              file \
+              pkg-config \
+              libasound2-dev \
+              libgl1-mesa-dev \
+              libssl-dev \
+              libwayland-dev \
+              libx11-dev \
+              libxcursor-dev \
+              libxi-dev \
+              libxinerama-dev \
+              libxkbcommon-dev \
+              libxrandr-dev
+          run: |
+            set -euxo pipefail
+
+            curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
+            . "$HOME/.cargo/env"
+
+            cargo build --release --locked
+
+            version="${GITHUB_REF_NAME#v}"
+            artifact_name="${APP_NAME}-${version}-${APPIMAGE_SUFFIX}.AppImage"
+
+            mkdir -p AppDir/usr/bin
+            cp "target/release/${APP_NAME}" AppDir/usr/bin/${APP_NAME}
+            cp assets/logo.png AppDir/${APP_NAME}.png
+
+            printf '%s\n' \
+              '#!/bin/sh' \
+              'here="$(dirname "$(readlink -f "$0")")"' \
+              'exec "$here/usr/bin/wiresmart" "$@"' \
+              > AppDir/AppRun
+            chmod +x AppDir/AppRun
+
+            printf '%s\n' \
+              '[Desktop Entry]' \
+              'Type=Application' \
+              'Name=NB WireSmart' \
+              'Exec=wiresmart' \
+              'Icon=wiresmart' \
+              'Categories=Network;Utility;' \
+              'Terminal=false' \
+              > AppDir/${APP_NAME}.desktop
+
+            curl -L "$APPIMAGETOOL_URL" -o appimagetool.AppImage
+            chmod +x appimagetool.AppImage
+            ARCH="$APPIMAGE_ARCH" ./appimagetool.AppImage --appimage-extract-and-run AppDir "$artifact_name"
+            rm -f appimagetool.AppImage
+
+            sha256sum "$artifact_name" > "${artifact_name}.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: appimage-${{ matrix.arch.artifact_suffix }}
+          if-no-files-found: error
+          path: |
+            wiresmart-*.AppImage
+            wiresmart-*.AppImage.sha256
+
+  publish-release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    needs: build-appimage
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+
+      - name: Attach assets to GitHub release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        with:
+          files: |
+            dist/**/*.AppImage
+            dist/**/*.AppImage.sha256
+          fail_on_unmatched_files: true
+          generate_release_notes: true
